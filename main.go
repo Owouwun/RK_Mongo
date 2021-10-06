@@ -36,6 +36,7 @@ func getCollection(dbName string, collectionName string) (context.Context, *mong
 	return ctx, collection
 }
 
+//The data that be sended to fill of the html file
 type Data struct {
 	Table Table
 }
@@ -67,8 +68,6 @@ func getTitles(data *Data, ctx context.Context, collection *mongo.Collection) {
 		titles[i] = result[i+1].Key
 	}
 
-	//delete(titles, 0)
-
 	data.Table.Titles = titles
 }
 func getRows(data *Data, ctx context.Context, collection *mongo.Collection) {
@@ -95,19 +94,76 @@ func getRows(data *Data, ctx context.Context, collection *mongo.Collection) {
 	}
 	data.Table.Rows = rows
 }
-
-func main() {
+func table(w http.ResponseWriter, r *http.Request) {
 	var data Data
 	ctx, collection := getCollection("seagull", "request")
 	getTable(&data, ctx, collection)
+	tmpl, _ := template.ParseFiles("table.html")
+	err := tmpl.Execute(w, data)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 
-	http.HandleFunc("/test.html", func(w http.ResponseWriter, r *http.Request) {
-		tmpl, _ := template.ParseFiles("test.html")
-		err := tmpl.Execute(w, data)
+func authCheck(login string, password string) bool {
+	ctx, collection := getCollection("seagull", "employee")
+	cur, err := collection.Find(ctx, bson.D{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for cur.Next(ctx) {
+		var result bson.D
+
+		err = cur.Decode(&result)
+		if err != nil {
+			log.Fatal(err)
+		}
+		m := result.Map()
+		if m["login"] == login {
+			if m["password"] == password {
+				println("Верный пароль.")
+				return true
+			} else {
+				println("Неверный пароль!")
+				return false
+			}
+		}
+	}
+	println("Такого логина не существует!")
+	return false
+}
+
+func auth(w http.ResponseWriter, r *http.Request) {
+	login := r.FormValue("login")
+	password := r.FormValue("password")
+
+	println(login, " ", password)
+
+	if authCheck(login, password) {
+		http.Redirect(w, r, "/table.html", http.StatusSeeOther)
+	}
+
+	/*
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("123"), bcrypt.DefaultCost)
+		err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
+		if err!=nil {http.Error(w, "Wrong password!", http.StatusUnauthorized)}
+
+		http.Redirect(w, r, "/table.html", http.StatusSeeOther)
+	*/
+}
+
+func main() {
+	http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
+		tmpl, _ := template.ParseFiles("login.html")
+		err := tmpl.Execute(w, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
 	})
+	http.HandleFunc("/auth", auth)
+
+	http.HandleFunc("/table.html", table)
 
 	err := http.ListenAndServe(":8888", nil)
 	if err != nil {
