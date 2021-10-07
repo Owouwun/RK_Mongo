@@ -6,5 +6,20 @@
 </head>
 <body>
 
+<table border="1px solid grey">
+    <tr>
+        {{range .Table.Titles}}
+        <th>{{ . }}</th>
+        {{end}}
+    </tr>
+    {{range $i := .Table.Rows}}
+    <tr>
+        {{range $j := $i}}
+        <td>{{$j}}</td>
+        {{end}}
+    </tr>
+    {{end}}
+</table>
+
 </body>
 </html>

@@ -2,24 +2,80 @@
 <html lang="en" xmlns="http://www.w3.org/1999/html">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Table</title>
+    <style>
+        .haze {
+            background: rgba(102, 102, 102, 0.5);
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: none;
+        }
+        .popup {
+            width: 200px;
+            height: 250px;
+            margin: auto;
+            text-align: center;
+            padding: 15px;
+            border: 3px solid #0000cc;
+            border-radius: 10px;
+            color: #0000cc;
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            background: #fff;
+        }
+        .popup p {
+            width: 100px;
+            margin: auto;
+        }
+        .haze:target {display: block;}
+        .close {
+            display: inline-block;
+            border: 1px solid #0000cc;
+            color: #0000cc;
+            padding: 0 12px;
+            margin: 10px;
+            text-decoration: none;
+            background: #f2f2f2;
+            font-size: 14pt;
+            cursor:pointer;
+        }
+        .close:hover {background: #e6e6ff;}
+    </style>
 </head>
 <body>
-
 <table border="1px solid grey">
     <tr>
         {{range .Table.Titles}}
             <th>{{ . }}</th>
         {{end}}
+        <th>Редактировать</th>
     </tr>
-    {{range $i := .Table.Rows}}
+    {{range $i, $j := .Table.Rows}}
         <tr>
-        {{range $j := $i}}
-            <td>{{$j}}</td>
-        {{end}}
+            {{range $k := $j}}
+                <td>{{$k}}</td>
+            {{end}}
+            <td><a href="#emp{{$i}}">Ред. {{$i}}</a></td>
         </tr>
     {{end}}
 </table>
+
+{{range $i, $j := .Table.Rows}}
+    <div class="haze" id="emp{{$i}}">
+        <div class="popup">
+            {{range $k, $l := $j}}
+                <p>{{$k}} {{$l}}</p>
+            {{end}}
+            <a href="#" class="close">Закрыть окно</a>
+        </div>
+    </div>
+{{end}}
 
 </body>
 </html>

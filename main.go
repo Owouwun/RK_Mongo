@@ -41,15 +41,15 @@ type Data struct {
 	Table Table
 }
 type Table struct {
-	Rows   [][]interface{}
 	Titles []string
+	Rows   [][]interface{}
 }
 
 func getTable(data *Data, ctx context.Context, collection *mongo.Collection) {
-	getTitles(data, ctx, collection)
-	getRows(data, ctx, collection)
+	data.Table.Titles = getTitles(data, ctx, collection)
+	data.Table.Rows = getRows(data, ctx, collection)
 }
-func getTitles(data *Data, ctx context.Context, collection *mongo.Collection) {
+func getTitles(data *Data, ctx context.Context, collection *mongo.Collection) []string {
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		log.Fatal(err)
@@ -68,9 +68,9 @@ func getTitles(data *Data, ctx context.Context, collection *mongo.Collection) {
 		titles[i] = result[i+1].Key
 	}
 
-	data.Table.Titles = titles
+	return titles
 }
-func getRows(data *Data, ctx context.Context, collection *mongo.Collection) {
+func getRows(data *Data, ctx context.Context, collection *mongo.Collection) [][]interface{} {
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		log.Fatal(err)
@@ -92,7 +92,7 @@ func getRows(data *Data, ctx context.Context, collection *mongo.Collection) {
 		}
 		rows = append(rows, row)
 	}
-	data.Table.Rows = rows
+	return rows
 }
 func table(w http.ResponseWriter, r *http.Request) {
 	var data Data
@@ -114,12 +114,12 @@ func authCheck(login string, password string) bool {
 
 	for cur.Next(ctx) {
 		var result bson.D
-
 		err = cur.Decode(&result)
 		if err != nil {
 			log.Fatal(err)
 		}
 		m := result.Map()
+
 		if m["login"] == login {
 			if m["password"] == password {
 				println("Верный пароль.")
@@ -153,6 +153,17 @@ func auth(w http.ResponseWriter, r *http.Request) {
 	*/
 }
 
+func admin(w http.ResponseWriter, r *http.Request) {
+	var data Data
+	ctx, collection := getCollection("seagull", "employee")
+	getTable(&data, ctx, collection)
+	tmpl, _ := template.ParseFiles("admin.html")
+	err := tmpl.Execute(w, data)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func main() {
 	http.HandleFunc("/login.html", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, _ := template.ParseFiles("login.html")
@@ -164,6 +175,8 @@ func main() {
 	http.HandleFunc("/auth", auth)
 
 	http.HandleFunc("/table.html", table)
+
+	http.HandleFunc("/admin.html", admin)
 
 	err := http.ListenAndServe(":8888", nil)
 	if err != nil {
