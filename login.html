@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Login</title>
 </head>
 <body>
     <form action="/auth" method="post">
@@ -10,5 +10,8 @@
         Password: <input type="text" name="password">
         <input type="submit">
     </form>
+{{ if index . 0 }} <p>Неверный логин или пароль!</p>
+    {{else}}
+{{end}}
 </body>
 </html>

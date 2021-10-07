@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <title>Table</title>
     <style>
+        .hide {
+            display: none;
+        }
         .haze {
             background: rgba(102, 102, 102, 0.5);
             width: 100%;
@@ -14,8 +17,8 @@
             display: none;
         }
         .popup {
-            width: 200px;
-            height: 250px;
+            width: 400px;
+            height: 230px;
             margin: auto;
             text-align: center;
             padding: 15px;
@@ -30,7 +33,7 @@
             background: #fff;
         }
         .popup p {
-            width: 100px;
+            width: 380px;
             margin: auto;
         }
         .haze:target {display: block;}
@@ -48,32 +51,49 @@
         .close:hover {background: #e6e6ff;}
     </style>
 </head>
+
+{{$titles := .Table.Titles}}
+
 <body>
 <table border="1px solid grey">
     <tr>
-        {{range .Table.Titles}}
+        {{range $titles}}
             <th>{{ . }}</th>
         {{end}}
-        <th>Редактировать</th>
+        <th class="hide">Редактировать</th>
     </tr>
     {{range $i, $j := .Table.Rows}}
         <tr>
             {{range $k := $j}}
                 <td>{{$k}}</td>
             {{end}}
-            <td><a href="#emp{{$i}}">Ред. {{$i}}</a></td>
+            <td><a href="#emp{{$i}}">Изменить</a></td>
         </tr>
     {{end}}
 </table>
 
+<a href="#addEmp">Добавить заказ</a>
+
+<div class="haze" id="addEmp">
+    <form action="/addEmp" method="post" class="popup">
+        {{range $i := $titles}}
+            <p>{{ . }}:<input name="{{ . }}" type="text"></p>
+        {{end}}
+        <input type="submit" value="Добавить">
+        <a href="#" class="close">Закрыть окно</a>
+    </form>
+</div>
+
 {{range $i, $j := .Table.Rows}}
     <div class="haze" id="emp{{$i}}">
-        <div class="popup">
+        <form action="/updateEmp" method="post" class="popup" id="form{{$i}}">
             {{range $k, $l := $j}}
-                <p>{{$k}} {{$l}}</p>
+                <p>{{index $titles $k}}:<input name="{{index $titles $k}}" type="text" value="{{$l}}"></p>
             {{end}}
+            <input name="row" value="{{$i}}" class="hide">
+            <input type="submit" value="Изменить">
             <a href="#" class="close">Закрыть окно</a>
-        </div>
+        </form>
     </div>
 {{end}}
 
