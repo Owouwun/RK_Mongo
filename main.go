@@ -37,27 +37,33 @@ func getCollection(dbName string, collectionName string) (context.Context, *mong
 	return ctx, collection
 }
 
-//The data that be sended to fill of the html file
-type Data struct {
-	Table Table
-	Error bool
-}
+//The data that be sent to fill of the html file
 type Table struct {
 	Titles []string
 	Rows   [][]interface{}
 }
 
-func getTable(data *Data, ctx context.Context, collection *mongo.Collection) {
-	data.Table.Titles = getTitles(data, ctx, collection)
-	data.Table.Rows = getRows(data, ctx, collection)
+func tablePage(w http.ResponseWriter, r *http.Request) {
+	ctx, collection := getCollection("seagull", "request")
+	var data Table
+	getTable(&data, ctx, collection)
+
+	tmpl, _ := template.ParseFiles("table.html")
+	err := tmpl.Execute(w, data)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
-func getTitles(data *Data, ctx context.Context, collection *mongo.Collection) []string {
+func getTable(data *Table, ctx context.Context, collection *mongo.Collection) {
+	data.Titles = getTitles(data, ctx, collection)
+	data.Rows = getRows(data, ctx, collection)
+}
+func getTitles(data *Table, ctx context.Context, collection *mongo.Collection) []string {
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer cur.Close(ctx)
-
 	cur.Next(ctx)
 	var result bson.D
 	err = cur.Decode(&result)
@@ -72,65 +78,78 @@ func getTitles(data *Data, ctx context.Context, collection *mongo.Collection) []
 
 	return titles
 }
-func getRows(data *Data, ctx context.Context, collection *mongo.Collection) [][]interface{} {
+func getRows(data *Table, ctx context.Context, collection *mongo.Collection) [][]interface{} {
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer cur.Close(ctx)
-
 	var rows [][]interface{}
 
-	for i := 0; cur.Next(ctx); i++ {
+	for cur.Next(ctx) {
 		var result bson.D
-		row := make([]interface{}, len(data.Table.Titles))
-
 		err = cur.Decode(&result)
 		if err != nil {
 			log.Fatal(err)
 		}
-		for j := 0; j < len(data.Table.Titles); j++ {
+
+		row := make([]interface{}, len(data.Titles))
+		for j := 0; j < len(data.Titles); j++ {
 			row[j] = result[j+1].Value
 		}
 		rows = append(rows, row)
 	}
 	return rows
 }
-func tablePage(w http.ResponseWriter, r *http.Request) {
-	var data Data
-	ctx, collection := getCollection("seagull", "request")
-	getTable(&data, ctx, collection)
-	tmpl, _ := template.ParseFiles("table.html")
+
+type LoginData struct {
+	Status string
+}
+
+func loginPage(w http.ResponseWriter, r *http.Request) {
+	status, _ := r.Cookie("Status")
+	var data LoginData
+
+	if status != nil {
+		data.Status = status.Value
+	} else {
+		data.Status = strconv.Itoa(http.StatusAccepted)
+	}
+
+	deleteCookie(w, "Status")
+
+	tmpl, _ := template.ParseFiles("login.html")
 	err := tmpl.Execute(w, data)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
-
-func loginPage(w http.ResponseWriter, r *http.Request) {
-	c, _ := r.Cookie("Status")
-	var unauth []bool
-
-	//data.Status = append(data.Status, "")
-
-	if c != nil && c.Value == "401" {
-		c = &http.Cookie{
-			Name:    "Status",
-			Expires: time.Unix(0, 0),
-		}
-		http.SetCookie(w, c)
-		unauth = append(unauth, true)
-		//data.Status = append(data.Status, "Неверный логин или пароль!")
-	} else {
-		unauth = append(unauth, false)
-	}
-	tmpl, _ := template.ParseFiles("login.html")
-	err := tmpl.Execute(w, unauth)
-	if err != nil {
-		log.Fatal(err)
-	}
+func deleteCookie(w http.ResponseWriter, name string) {
+	http.SetCookie(w, &http.Cookie{Name: name, Expires: time.Unix(0, 0)})
 }
-func authCheck(login string, password string) bool {
+func auth(w http.ResponseWriter, r *http.Request) {
+	cookie := &http.Cookie{
+		Name:   "Status",
+		Value:  strconv.Itoa(authCheck(r.FormValue("login"), r.FormValue("password"))), //Строковое значение статуса проверки аутентификации для отправленных формой логина и пароля
+		MaxAge: 1000,
+	}
+	http.SetCookie(w, cookie)
+
+	if cookie.Value == strconv.Itoa(http.StatusAccepted) {
+		http.Redirect(w, r, "/table.html", http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/login.html", http.StatusSeeOther)
+	}
+
+	/*
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("123"), bcrypt.DefaultCost)
+		err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
+		if err!=nil {http.Error(w, "Wrong password!", http.StatusUnauthorized)}
+
+		http.Redirect(w, r, "/table.html", http.StatusSeeOther)
+	*/
+}
+func authCheck(login string, password string) int {
 	ctx, collection := getCollection("seagull", "employee")
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
@@ -147,47 +166,20 @@ func authCheck(login string, password string) bool {
 
 		if m["login"] == login {
 			if m["password"] == password {
-				println("Верный пароль.")
-				return true
+				return http.StatusAccepted
 			} else {
-				println("Неверный пароль!")
-				return false
+				return http.StatusForbidden
 			}
 		}
 	}
-	println("Такого логина не существует!")
-	return false
-}
-func auth(w http.ResponseWriter, r *http.Request) {
-	login := r.FormValue("login")
-	password := r.FormValue("password")
-	println(login, " ", password)
-
-	if authCheck(login, password) {
-		http.Redirect(w, r, "/table.html", http.StatusSeeOther)
-	} else {
-		cookie := &http.Cookie{
-			Name:   "Status",
-			Value:  "401",
-			MaxAge: 1000,
-		}
-		http.SetCookie(w, cookie)
-		http.Redirect(w, r, "/login.html", http.StatusSeeOther)
-	}
-
-	/*
-		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("123"), bcrypt.DefaultCost)
-		err := bcrypt.CompareHashAndPassword(hashedPassword, []byte(password))
-		if err!=nil {http.Error(w, "Wrong password!", http.StatusUnauthorized)}
-
-		http.Redirect(w, r, "/table.html", http.StatusSeeOther)
-	*/
+	return http.StatusUnauthorized
 }
 
 func adminPage(w http.ResponseWriter, r *http.Request) {
-	var data Data
+	var data Table
 	ctx, collection := getCollection("seagull", "employee")
 	getTable(&data, ctx, collection)
+
 	tmpl, _ := template.ParseFiles("admin.html")
 	err := tmpl.Execute(w, data)
 	if err != nil {
@@ -196,20 +188,20 @@ func adminPage(w http.ResponseWriter, r *http.Request) {
 }
 func updateEmp(w http.ResponseWriter, r *http.Request) {
 	ctx, collection := getCollection("seagull", "request")
-
 	cur, err := collection.Find(ctx, bson.D{})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer cur.Close(ctx)
 
-	n, err := strconv.Atoi(r.FormValue("row"))
+	rowNumber, err := strconv.Atoi(r.FormValue("row"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	for i := 0; i <= n; i++ {
+	for i := 0; i <= rowNumber; i++ { //Переносим указатель на нужную строку
 		cur.Next(ctx)
 	}
+
 	var result bson.D
 	err = cur.Decode(&result)
 	if err != nil {
@@ -223,44 +215,36 @@ func updateEmp(w http.ResponseWriter, r *http.Request) {
 
 	titles := getTitles(nil, ctx, collection)
 
-	var EsDoc []bson.E
+	var updDoc bson.D //UpdatingDocument
 	for i := 0; i < len(row); i++ {
-		EsDoc = append(EsDoc, bson.E{Key: titles[i], Value: row[i]})
+		updDoc = append(updDoc, bson.E{Key: titles[i], Value: row[i]})
 	}
-	var updDoc bson.D
-	updDoc = EsDoc
 
-	var EsVal []bson.E
+	var setVal bson.D //SettingValues
 	for i := 0; i < len(row); i++ {
-		EsVal = append(EsVal, bson.E{Key: titles[i], Value: r.FormValue(titles[i])})
+		setVal = append(setVal, bson.E{Key: titles[i], Value: r.FormValue(titles[i])})
 	}
-	var D bson.D
-	D = EsVal
-	setVal := bson.D{{"$set", D}}
-	res, err := collection.UpdateOne(ctx, updDoc, setVal)
+	setVal = bson.D{{"$set", setVal}}
+
+	_, err = collection.UpdateOne(ctx, updDoc, setVal)
 	if err != nil {
 		log.Fatal(err)
 	}
-	println(res.MatchedCount, res.ModifiedCount)
 	http.Redirect(w, r, "/table.html", http.StatusSeeOther)
 }
 func addEmp(w http.ResponseWriter, r *http.Request) {
 	ctx, collection := getCollection("seagull", "request")
-
 	titles := getTitles(nil, ctx, collection)
 
-	var EsVal []bson.E
-	for i := 0; i < len(titles); i++ {
-		EsVal = append(EsVal, bson.E{Key: titles[i], Value: r.FormValue(titles[i])})
-	}
 	var Doc bson.D
-	Doc = EsVal
-	//setVal := bson.D{{"$set", D}}
-	res, err := collection.InsertOne(ctx, Doc)
+	for i := 0; i < len(titles); i++ {
+		Doc = append(Doc, bson.E{Key: titles[i], Value: r.FormValue(titles[i])})
+	}
+
+	_, err := collection.InsertOne(ctx, Doc)
 	if err != nil {
 		log.Fatal(err)
 	}
-	println(res.InsertedID)
 	http.Redirect(w, r, "/table.html", http.StatusSeeOther)
 }
 

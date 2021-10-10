@@ -52,7 +52,7 @@
     </style>
 </head>
 
-{{$titles := .Table.Titles}}
+{{$titles := .Titles}}
 
 <body>
 <table border="1px solid grey">
@@ -62,7 +62,7 @@
         {{end}}
         <th class="hide">Редактировать</th>
     </tr>
-    {{range $i, $j := .Table.Rows}}
+    {{range $i, $j := .Rows}}
         <tr>
             {{range $k := $j}}
                 <td>{{$k}}</td>
@@ -84,7 +84,7 @@
     </form>
 </div>
 
-{{range $i, $j := .Table.Rows}}
+{{range $i, $j := .Rows}}
     <div class="haze" id="emp{{$i}}">
         <form action="/updateEmp" method="post" class="popup" id="form{{$i}}">
             {{range $k, $l := $j}}
